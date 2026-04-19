@@ -1,0 +1,13 @@
+{
+  "name": "cs2-steam-proxy",
+  "version": "1.0.0",
+  "description": "Proxy Express pour contourner le CORS de l'API Steam",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
