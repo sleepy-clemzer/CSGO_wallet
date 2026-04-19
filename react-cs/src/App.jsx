@@ -4,16 +4,11 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
 
-// ── CONFIG ────────────────────────────────────────────────────────────────────
 const SKINS_API = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins.json";
 const PROXY = import.meta.env.VITE_STEAM_PROXY_URL || "http://localhost:3001";
 const STEAM_PROXY = (name) => `${PROXY}/steam-price?name=${encodeURIComponent(name)}`;
-const HISTORY_URL = (name) => name
-  ? `${PROXY}/price-history?name=${encodeURIComponent(name)}`
-  : `${PROXY}/price-history`;
+const HISTORY_URL = (name) => name ? `${PROXY}/price-history?name=${encodeURIComponent(name)}` : `${PROXY}/price-history`;
 const RECORD_URL = `${PROXY}/record-prices`;
-
-// Auto-refresh interval (ms) — default 30 min
 const AUTO_REFRESH_MS = 0.5 * 60 * 1000;
 
 const WEAR_LABELS = {
@@ -23,7 +18,6 @@ const WEAR_LABELS = {
 const WEAR_ORDER = ["Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
 const SKIN_COLORS = ["#3fb950","#58a6ff","#f0883e","#a371f7","#f85149","#d29922","#38bdf8","#e879f9","#fb923c","#34d399"];
 
-// Time ranges like CoinMarketCap
 const TIME_RANGES = [
   { key: "1h",  label: "1H",  ms: 60*60*1000 },
   { key: "24h", label: "24H", ms: 24*60*60*1000 },
@@ -32,7 +26,8 @@ const TIME_RANGES = [
   { key: "all", label: "Tout", ms: Infinity },
 ];
 
-// ── CSS ───────────────────────────────────────────────────────────────────────
+const POPULAR_WEAPONS = ["AK-47", "AWP", "M4A4", "Desert Eagle", "Glock-18", "M4A1-S", "USP-S", "Knife"];
+
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +37,6 @@ body{background:#07090f}
 .pulse{width:8px;height:8px;border-radius:50%;background:#3fb950;animation:p 2.5s infinite;flex-shrink:0}
 @keyframes p{0%,100%{opacity:1}50%{opacity:.2}}
 .htitle{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:.12em;color:#e6edf3}
-.hsub{font-family:'Share Tech Mono',monospace;font-size:10px;color:#30363d;margin-left:auto}
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
 .kpi{background:#0d1117;border:1px solid #161b22;border-radius:10px;padding:14px 16px}
 .klbl{font-family:'Share Tech Mono',monospace;font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
@@ -59,7 +53,6 @@ body{background:#07090f}
 .time-tabs{display:flex;gap:3px;background:#07090f;border:1px solid #161b22;border-radius:6px;padding:2px}
 .time-tab{font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 8px;border-radius:4px;border:none;background:transparent;color:#484f58;cursor:pointer;letter-spacing:.04em;transition:all .15s}
 .time-tab.on{background:#161b22;color:#c9d1d9}
-.time-tab:hover:not(.on){color:#8b949e}
 .legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
 .leg{display:flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:10px;color:#6e7681;cursor:pointer;transition:opacity .15s;user-select:none}
 .leg.dim{opacity:.3}
@@ -96,10 +89,20 @@ body{background:#07090f}
 .inp{background:#07090f;border:1px solid #21262d;border-radius:6px;padding:9px 12px;color:#e6edf3;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;transition:border-color .15s;width:100%}
 .inp:focus{border-color:#3fb950;box-shadow:0 0 0 2px rgba(63,185,80,.1)}
 .inp::placeholder{color:#30363d}
-.weapon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-bottom:14px;max-height:200px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#21262d transparent}
-.weapon-btn{padding:7px 10px;border-radius:7px;border:1px solid #21262d;background:#07090f;color:#6e7681;font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;text-align:left;display:flex;align-items:center;gap:6px}
-.weapon-btn:hover{border-color:#30363d;color:#c9d1d9}
-.weapon-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* COMBOBOX ARME */
+.combo-wrap{position:relative;margin-bottom:4px}
+.combo-input{background:#07090f;border:1px solid #21262d;border-radius:6px;padding:9px 32px 9px 12px;color:#e6edf3;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;transition:border-color .15s;width:100%;cursor:pointer;text-align:left}
+.combo-input:focus,.combo-input.open{border-color:#3fb950;box-shadow:0 0 0 2px rgba(63,185,80,.1)}
+.combo-arrow{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:#484f58;font-size:10px;transition:transform .2s}
+.combo-arrow.open{transform:translateY(-50%) rotate(180deg)}
+.combo-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#0d1117;border:1px solid #21262d;border-radius:8px;z-index:50;overflow:hidden;max-height:260px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#21262d transparent}
+.combo-sep{padding:5px 12px 3px;font-family:'Share Tech Mono',monospace;font-size:9px;color:#30363d;text-transform:uppercase;letter-spacing:.1em;background:#07090f;position:sticky;top:0}
+.combo-opt{padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#c9d1d9;cursor:pointer;border-left:2px solid transparent;transition:all .1s}
+.combo-opt:hover,.combo-opt.hl{background:#161b22;border-left-color:#3fb950;color:#e6edf3}
+.combo-opt mark{background:none;color:#3fb950;font-style:normal}
+.combo-empty{padding:10px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#484f58}
+
 .skin-scroll{max-height:240px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#21262d transparent;margin-bottom:12px}
 .skin-opt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;transition:all .15s;border:1px solid transparent}
 .skin-opt:hover{background:#111827;border-color:#161b22}
@@ -188,13 +191,107 @@ const KpiCard = ({ label, value, sub, color = "#c9d1d9" }) => (
   </div>
 );
 
+// ── WEAPON COMBOBOX ───────────────────────────────────────────────────────────
+function WeaponCombobox({ weapons, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [displayValue, setDisplayValue] = useState("");
+  const inputRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  const filtered = query.trim()
+    ? weapons.filter(w => w.name.toLowerCase().includes(query.toLowerCase()))
+    : weapons;
+
+  const popular = filtered.filter(w => POPULAR_WEAPONS.includes(w.name));
+  const others = filtered.filter(w => !POPULAR_WEAPONS.includes(w.name));
+
+  function pick(w) {
+    setDisplayValue(w.name);
+    setQuery("");
+    setOpen(false);
+    onSelect(w);
+  }
+
+  function handleInputChange(e) {
+    setQuery(e.target.value);
+    setDisplayValue(e.target.value);
+    setOpen(true);
+  }
+
+  function handleFocus() {
+    setOpen(true);
+    setQuery("");
+  }
+
+  function handleBlur(e) {
+    if (wrapRef.current && wrapRef.current.contains(e.relatedTarget)) return;
+    setOpen(false);
+    setQuery("");
+  }
+
+  function highlight(name) {
+    if (!query.trim()) return name;
+    const i = name.toLowerCase().indexOf(query.toLowerCase());
+    if (i === -1) return name;
+    return (
+      <>
+        {name.slice(0, i)}
+        <mark style={{ background: "none", color: "#3fb950", fontStyle: "normal" }}>
+          {name.slice(i, i + query.length)}
+        </mark>
+        {name.slice(i + query.length)}
+      </>
+    );
+  }
+
+  const renderOpts = (list) => list.map(w => (
+    <div
+      key={w.id}
+      className="combo-opt"
+      onMouseDown={() => pick(w)}
+    >
+      {highlight(w.name)}
+    </div>
+  ));
+
+  return (
+    <div className="combo-wrap" ref={wrapRef} onBlur={handleBlur}>
+      <input
+        ref={inputRef}
+        className={`combo-input${open ? " open" : ""}`}
+        value={open ? (query || displayValue) : displayValue}
+        placeholder="Choisir une arme…"
+        onChange={handleInputChange}
+        onFocus={handleFocus}
+        autoComplete="off"
+      />
+      <span className={`combo-arrow${open ? " open" : ""}`}>▼</span>
+      {open && (
+        <div className="combo-dd">
+          {filtered.length === 0 && (
+            <div className="combo-empty">Aucun résultat pour "{query}"</div>
+          )}
+          {popular.length > 0 && !query.trim() && (
+            <>
+              <div className="combo-sep">Populaires</div>
+              {renderOpts(popular)}
+              {others.length > 0 && <div className="combo-sep">Toutes les armes</div>}
+            </>
+          )}
+          {query.trim() ? renderOpts(filtered) : renderOpts(others)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ADD SKIN PANEL ────────────────────────────────────────────────────────────
 function AddSkinPanel({ onAdd }) {
   const [open, setOpen] = useState(true);
   const [allSkins, setAllSkins] = useState([]);
   const [loadingDB, setLoadingDB] = useState(false);
   const [dbError, setDbError] = useState(null);
-  const [weaponSearch, setWeaponSearch] = useState("");
   const [selWeapon, setSelWeapon] = useState(null);
   const [skinSearch, setSkinSearch] = useState("");
   const [selSkin, setSelSkin] = useState(null);
@@ -215,9 +312,18 @@ function AddSkinPanel({ onAdd }) {
   }, [open]);
 
   const weapons = [...new Map(allSkins.map(s => [s.weapon.name, s.weapon])).values()]
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const filteredWeapons = weaponSearch ? weapons.filter(w => w.name.toLowerCase().includes(weaponSearch.toLowerCase())) : weapons;
-  const skinsForWeapon = selWeapon ? allSkins.filter(s => s.weapon.name === selWeapon.name && (skinSearch === "" || s.name.toLowerCase().includes(skinSearch.toLowerCase()))) : [];
+    .sort((a, b) => {
+      const ai = POPULAR_WEAPONS.indexOf(a.name);
+      const bi = POPULAR_WEAPONS.indexOf(b.name);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const skinsForWeapon = selWeapon
+    ? allSkins.filter(s => s.weapon.name === selWeapon.name && (skinSearch === "" || s.name.toLowerCase().includes(skinSearch.toLowerCase())))
+    : [];
 
   useEffect(() => {
     if (!selSkin || !selWear) { setMarketPrice(null); setPriceError(null); return; }
@@ -231,7 +337,17 @@ function AddSkinPanel({ onAdd }) {
   }, [selSkin, selWear]);
 
   const step = !selWeapon ? 1 : !selSkin ? 2 : !selWear ? 3 : 4;
-  const reset = (w) => { setSelWeapon(w); setSelSkin(null); setSelWear(null); setSkinSearch(""); setMarketPrice(null); setBuyPrice(""); setPriceError(null); };
+
+  const reset = (w) => {
+    setSelWeapon(w);
+    setSelSkin(null);
+    setSelWear(null);
+    setSkinSearch("");
+    setMarketPrice(null);
+    setBuyPrice("");
+    setPriceError(null);
+  };
+
   const buyNum = parseFloat(buyPrice) || 0;
   const profit = marketPrice != null ? marketPrice - buyNum : null;
   const pct = buyNum > 0 && profit != null ? (profit / buyNum) * 100 : null;
@@ -239,8 +355,17 @@ function AddSkinPanel({ onAdd }) {
 
   const handleAdd = () => {
     if (!canAdd) return;
-    onAdd({ weapon: selWeapon.name, name: `${selSkin.name.split("|")[1]?.trim() ?? selSkin.name} ${WEAR_LABELS[selWear] ?? ""}`.trim(), fullName: rawMarketName, buy: buyNum, marketPrice, image: selSkin.image, rarity: selSkin.rarity, color: SKIN_COLORS[Math.floor(Math.random() * SKIN_COLORS.length)] });
-    reset(null); setWeaponSearch("");
+    onAdd({
+      weapon: selWeapon.name,
+      name: `${selSkin.name.split("|")[1]?.trim() ?? selSkin.name} ${WEAR_LABELS[selWear] ?? ""}`.trim(),
+      fullName: rawMarketName,
+      buy: buyNum,
+      marketPrice,
+      image: selSkin.image,
+      rarity: selSkin.rarity,
+      color: SKIN_COLORS[Math.floor(Math.random() * SKIN_COLORS.length)],
+    });
+    reset(null);
   };
 
   return (
@@ -249,34 +374,142 @@ function AddSkinPanel({ onAdd }) {
         <span className="card-title">+ Ajouter un skin</span>
         <span className={`chevron${open ? " open" : ""}`}>▲</span>
       </div>
-      {open && <div style={{ marginTop: 16 }}>
-        <div className="steps">
-          {["Arme", "Skin", "Usure", "Prix"].map((s, i) => <div key={s} className={`step${step > i + 1 ? " done" : step === i + 1 ? " active" : ""}`}><span className="step-num">{step > i + 1 ? "✓" : i + 1}</span>{s}</div>)}
+
+      {open && (
+        <div style={{ marginTop: 16 }}>
+          <div className="steps">
+            {["Arme", "Skin", "Usure", "Prix"].map((s, i) => (
+              <div key={s} className={`step${step > i + 1 ? " done" : step === i + 1 ? " active" : ""}`}>
+                <span className="step-num">{step > i + 1 ? "✓" : i + 1}</span>{s}
+              </div>
+            ))}
+          </div>
+
+          {loadingDB && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0" }}>
+              <div className="spin" /><span className="muted">Chargement de la base…</span>
+            </div>
+          )}
+          {dbError && <p className="err">{dbError}</p>}
+
+          {!loadingDB && !dbError && (
+            <>
+              {/* ÉTAPE 1 — ARME */}
+              <div className="sec-lbl">
+                {selWeapon
+                  ? <span style={{ color: "#3fb950" }}>✓ {selWeapon.name} <button className="btn-link" onClick={() => reset(null)}>modifier</button></span>
+                  : "1. Arme"}
+              </div>
+
+              {!selWeapon && (
+                <WeaponCombobox weapons={weapons} onSelect={(w) => reset(w)} />
+              )}
+
+              {/* ÉTAPE 2 — SKIN */}
+              {selWeapon && (
+                <>
+                  <div className="sec-lbl" style={{ marginTop: 10 }}>
+                    {selSkin
+                      ? <span style={{ color: "#3fb950" }}>✓ {selSkin.name.split("|")[1]?.trim()} <button className="btn-link" onClick={() => { setSelSkin(null); setSelWear(null); setMarketPrice(null); }}>modifier</button></span>
+                      : `2. Skin (${skinsForWeapon.length})`}
+                  </div>
+
+                  {!selSkin && (
+                    <>
+                      <input
+                        className="inp"
+                        style={{ marginBottom: 8 }}
+                        placeholder="Rechercher un skin…"
+                        value={skinSearch}
+                        onChange={e => setSkinSearch(e.target.value)}
+                      />
+                      <div className="skin-scroll">
+                        {skinsForWeapon.map(s => (
+                          <div key={s.id} className="skin-opt" onClick={() => { setSelSkin(s); setSelWear(null); setMarketPrice(null); }}>
+                            {s.image && <img src={s.image} className="skin-img" alt="" loading="lazy" />}
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: "#e6edf3" }}>{s.name.split("|")[1]?.trim()}</div>
+                              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 10, color: s.rarity?.color ?? "#484f58", marginTop: 2 }}>{s.rarity?.name ?? "—"}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {skinsForWeapon.length === 0 && <p className="muted" style={{ padding: "12px 0" }}>Aucun résultat.</p>}
+                      </div>
+                    </>
+                  )}
+
+                  {/* ÉTAPE 3 — USURE */}
+                  {selSkin && (
+                    <>
+                      <div className="sec-lbl" style={{ marginTop: 10 }}>
+                        {selWear
+                          ? <span style={{ color: "#3fb950" }}>✓ {selWear} <button className="btn-link" onClick={() => setSelWear(null)}>modifier</button></span>
+                          : "3. Usure"}
+                      </div>
+
+                      {!selWear && (
+                        <div className="wear-grid">
+                          {WEAR_ORDER.map(w => {
+                            const ok = selSkin.wears?.some(sw => sw.name === w);
+                            return (
+                              <button key={w} className={`wear-btn${!ok ? " unavail" : ""}`} onClick={() => ok && setSelWear(w)}>
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>{WEAR_LABELS[w]}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* ÉTAPE 4 — PRIX */}
+                      {selWear && (
+                        <>
+                          <div className="sec-lbl" style={{ marginTop: 10 }}>4. Prix</div>
+                          <div className="price-row">
+                            <div className="price-box">
+                              <div className="price-box-lbl">Ton prix d'achat</div>
+                              <input className="inp" type="number" step="0.01" placeholder="ex: 52.00" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} style={{ fontSize: 14 }} />
+                              {buyNum > 0 && <div className="price-box-val" style={{ color: "#58a6ff" }}>{buyNum.toFixed(2)} €</div>}
+                            </div>
+                            <div className="price-box">
+                              <div className="price-box-lbl">Steam lowest_price</div>
+                              {fetchingPrice && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}><div className="spin" /><span className="muted">Proxy…</span></div>}
+                              {!fetchingPrice && marketPrice != null && <div className="price-box-val" style={{ color: "#3fb950" }}>{marketPrice.toFixed(2)} €</div>}
+                              {!fetchingPrice && priceError && <p className="err" style={{ marginTop: 8 }}>{priceError}</p>}
+                              <div className="price-box-sub">{rawMarketName}</div>
+                            </div>
+                          </div>
+
+                          {buyNum > 0 && marketPrice != null && (
+                            <div className="cmp-bar">
+                              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span className="muted">Achat vs marché</span>
+                                <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 12, color: profit >= 0 ? "#3fb950" : "#f85149" }}>
+                                  {profit >= 0 ? "+" : ""}{profit.toFixed(2)} € ({pct >= 0 ? "+" : ""}{pct.toFixed(1)}%)
+                                </span>
+                              </div>
+                              <div className="cmp-track">
+                                <div className="cmp-fill" style={{ width: `${Math.min(100, (Math.min(buyNum, marketPrice) / Math.max(buyNum, marketPrice)) * 100)}%`, background: profit >= 0 ? "#3fb950" : "#f85149" }} />
+                              </div>
+                              <div className="cmp-labels">
+                                <span style={{ color: "#58a6ff" }}>Achat {buyNum.toFixed(2)} €</span>
+                                <span style={{ color: "#3fb950" }}>Marché {marketPrice.toFixed(2)} €</span>
+                              </div>
+                            </div>
+                          )}
+
+                          <button className="btn-add" disabled={!canAdd} onClick={handleAdd}>
+                            {canAdd ? "Ajouter →" : "Saisissez un prix d'achat"}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
-        {loadingDB && <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0" }}><div className="spin" /><span className="muted">Chargement...</span></div>}
-        {dbError && <p className="err">{dbError}</p>}
-        {!loadingDB && !dbError && <>
-          <div className="sec-lbl">{selWeapon ? <span style={{ color: "#3fb950" }}>✓ {selWeapon.name} <button className="btn-link" onClick={() => reset(null)}>modifier</button></span> : "1. Arme"}</div>
-          {!selWeapon && <><input className="inp" style={{ marginBottom: 8 }} placeholder="Filtrer..." value={weaponSearch} onChange={e => setWeaponSearch(e.target.value)} /><div className="weapon-grid">{filteredWeapons.map(w => <button key={w.id} className="weapon-btn" onClick={() => reset(w)}><span className="weapon-dot" />{w.name}</button>)}</div></>}
-          {selWeapon && <>
-            <div className="sec-lbl" style={{ marginTop: 8 }}>{selSkin ? <span style={{ color: "#3fb950" }}>✓ {selSkin.name.split("|")[1]?.trim()} <button className="btn-link" onClick={() => { setSelSkin(null); setSelWear(null); setMarketPrice(null); }}>modifier</button></span> : `2. Skin (${skinsForWeapon.length})`}</div>
-            {!selSkin && <><input className="inp" style={{ marginBottom: 8 }} placeholder="Rechercher..." value={skinSearch} onChange={e => setSkinSearch(e.target.value)} /><div className="skin-scroll">{skinsForWeapon.map(s => <div key={s.id} className="skin-opt" onClick={() => { setSelSkin(s); setSelWear(null); setMarketPrice(null); }}>{s.image && <img src={s.image} className="skin-img" alt="" loading="lazy" />}<div><div style={{ fontSize: 13, fontWeight: 500, color: "#e6edf3" }}>{s.name.split("|")[1]?.trim()}</div><div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 10, color: s.rarity?.color ?? "#484f58", marginTop: 2 }}>{s.rarity?.name ?? "—"}</div></div></div>)}{skinsForWeapon.length === 0 && <p className="muted" style={{ padding: "12px 0" }}>Aucun résultat.</p>}</div></>}
-            {selSkin && <>
-              <div className="sec-lbl" style={{ marginTop: 8 }}>{selWear ? <span style={{ color: "#3fb950" }}>✓ {selWear} <button className="btn-link" onClick={() => setSelWear(null)}>modifier</button></span> : "3. Usure"}</div>
-              {!selWear && <div className="wear-grid">{WEAR_ORDER.map(w => { const ok = selSkin.wears?.some(sw => sw.name === w); return <button key={w} className={`wear-btn${!ok ? " unavail" : ""}`} onClick={() => ok && setSelWear(w)}><div style={{ fontSize: 13, fontWeight: 600 }}>{WEAR_LABELS[w]}</div></button>; })}</div>}
-              {selWear && <>
-                <div className="sec-lbl" style={{ marginTop: 8 }}>4. Prix</div>
-                <div className="price-row">
-                  <div className="price-box"><div className="price-box-lbl">Ton prix d'achat</div><input className="inp" type="number" step="0.01" placeholder="ex: 52.00" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} style={{ fontSize: 14 }} />{buyNum > 0 && <div className="price-box-val" style={{ color: "#58a6ff" }}>{buyNum.toFixed(2)} €</div>}</div>
-                  <div className="price-box"><div className="price-box-lbl">Steam lowest_price</div>{fetchingPrice && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}><div className="spin" /><span className="muted">Proxy...</span></div>}{!fetchingPrice && marketPrice != null && <div className="price-box-val" style={{ color: "#3fb950" }}>{marketPrice.toFixed(2)} €</div>}{!fetchingPrice && priceError && <p className="err" style={{ marginTop: 8 }}>{priceError}</p>}<div className="price-box-sub">{rawMarketName}</div></div>
-                </div>
-                {buyNum > 0 && marketPrice != null && <div className="cmp-bar"><div style={{ display: "flex", justifyContent: "space-between" }}><span className="muted">Achat vs marché</span><span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 12, color: profit >= 0 ? "#3fb950" : "#f85149" }}>{profit >= 0 ? "+" : ""}{profit.toFixed(2)} € ({pct >= 0 ? "+" : ""}{pct.toFixed(1)}%)</span></div><div className="cmp-track"><div className="cmp-fill" style={{ width: `${Math.min(100, (Math.min(buyNum, marketPrice) / Math.max(buyNum, marketPrice)) * 100)}%`, background: profit >= 0 ? "#3fb950" : "#f85149" }} /></div><div className="cmp-labels"><span style={{ color: "#58a6ff" }}>Achat {buyNum.toFixed(2)} €</span><span style={{ color: "#3fb950" }}>Marché {marketPrice.toFixed(2)} €</span></div></div>}
-                <button className="btn-add" disabled={!canAdd} onClick={handleAdd}>{canAdd ? "Ajouter →" : "Saisissez un prix d'achat"}</button>
-              </>}
-            </>}
-          </>}
-        </>}
-      </div>}
+      )}
     </div>
   );
 }
@@ -300,7 +533,6 @@ export default function CS2Dashboard() {
     document.head.appendChild(s); injected.current = true;
   }, []);
 
-  // ── Fetch all history from proxy ────────────────────────────────────────────
   const loadHistory = useCallback(async () => {
     try {
       const res = await fetch(HISTORY_URL());
@@ -310,7 +542,6 @@ export default function CS2Dashboard() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  // ── Auto-refresh: record prices every 30 min ───────────────────────────────
   const recordPrices = useCallback(async () => {
     if (portfolio.length === 0) return;
     setRefreshing(true);
@@ -323,7 +554,6 @@ export default function CS2Dashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        // Update portfolio market prices
         setPortfolio(prev => prev.map(s => {
           const r = data.recorded[s.fullName];
           return r?.success ? { ...s, marketPrice: r.price, lastRefresh: new Date().toISOString() } : s;
@@ -335,7 +565,6 @@ export default function CS2Dashboard() {
     setRefreshing(false);
   }, [portfolio, loadHistory]);
 
-  // Setup auto-refresh interval
   useEffect(() => {
     if (portfolio.length === 0) return;
     intervalRef.current = setInterval(recordPrices, AUTO_REFRESH_MS);
@@ -344,7 +573,6 @@ export default function CS2Dashboard() {
 
   const addSkin = useCallback((skin) => {
     setPortfolio(prev => [...prev, { ...skin, id: Date.now(), addedAt: new Date().toISOString() }]);
-    // History was already recorded by /steam-price endpoint
     setTimeout(loadHistory, 500);
   }, [loadHistory]);
 
@@ -355,7 +583,6 @@ export default function CS2Dashboard() {
 
   const toggleHidden = (id) => setHidden(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
   const weapons = ["Tout", ...Array.from(new Set(portfolio.map(s => s.weapon)))];
   const activeSkins = weaponFilter === "Tout" ? portfolio : portfolio.filter(s => s.weapon === weaponFilter);
   const totalBuy = activeSkins.reduce((a, s) => a + s.buy, 0);
@@ -364,15 +591,11 @@ export default function CS2Dashboard() {
   const pct = totalBuy > 0 ? (profit / totalBuy) * 100 : 0;
   const profitColor = profit >= 0 ? "#3fb950" : "#f85149";
 
-  // ── Build chart data from real history ──────────────────────────────────────
   const now = Date.now();
   const rangeMs = TIME_RANGES.find(r => r.key === timeRange)?.ms ?? Infinity;
   const cutoff = rangeMs === Infinity ? 0 : now - rangeMs;
 
-  // For "valeur" tab: sum all active skins' history into a portfolio value timeline
-  // For "skins" tab: individual skin lines
   const buildValueTimeline = () => {
-    // Collect all timestamps across all active skins
     const allTimes = new Set();
     activeSkins.forEach(s => {
       const h = priceHistory[s.fullName] || [];
@@ -380,39 +603,27 @@ export default function CS2Dashboard() {
     });
     const sortedTimes = [...allTimes].sort((a, b) => a - b);
     if (sortedTimes.length === 0) return [];
-
     return sortedTimes.map(t => {
       const point = { time: t, label: formatTime(t, timeRange) };
-      let total = 0;
-      let totalBuyRef = 0;
+      let total = 0, totalBuyRef = 0;
       activeSkins.forEach(s => {
         const h = priceHistory[s.fullName] || [];
-        // Find closest price at or before this timestamp
         const before = h.filter(p => p.t <= t);
         const price = before.length > 0 ? before[before.length - 1].p : (s.marketPrice ?? s.buy);
-        if (!hidden[s.id]) {
-          total += price;
-          totalBuyRef += s.buy;
-          point[s.name] = price;
-        }
+        if (!hidden[s.id]) { total += price; totalBuyRef += s.buy; point[s.name] = price; }
       });
-      point.valeur = total;
-      point.profit = total - totalBuyRef;
-      point.prix_initial = totalBuyRef;
+      point.valeur = total; point.profit = total - totalBuyRef; point.prix_initial = totalBuyRef;
       return point;
     });
   };
 
   const timeline = portfolio.length > 0 ? buildValueTimeline() : [];
   const hasHistory = timeline.length > 1;
-
-  // Price change for header
   const firstVal = timeline.length > 0 ? timeline[0].valeur : totalMarket;
   const lastVal = timeline.length > 0 ? timeline[timeline.length - 1].valeur : totalMarket;
   const changeAbs = lastVal - firstVal;
   const changePct = firstVal > 0 ? (changeAbs / firstVal) * 100 : 0;
 
-  // Comparison data for bar chart
   const comparisonData = activeSkins.filter(s => !hidden[s.id]).map(s => ({
     name: s.name.length > 16 ? s.name.slice(0, 14) + "…" : s.name,
     achat: s.buy, marche: s.marketPrice ?? s.buy, color: s.color,
@@ -439,7 +650,6 @@ export default function CS2Dashboard() {
       <AddSkinPanel onAdd={addSkin} />
 
       {portfolio.length > 0 && <>
-        {/* MAIN CHART */}
         <div className="card">
           <div className="card-hdr">
             <div>
@@ -469,33 +679,24 @@ export default function CS2Dashboard() {
               {tab !== "comparaison" && (
                 <div className="time-tabs">
                   {TIME_RANGES.map(r => (
-                    <button key={r.key} className={`time-tab${timeRange === r.key ? " on" : ""}`}
-                      onClick={() => setTimeRange(r.key)}>{r.label}</button>
+                    <button key={r.key} className={`time-tab${timeRange === r.key ? " on" : ""}`} onClick={() => setTimeRange(r.key)}>{r.label}</button>
                   ))}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Legend */}
           <div className="legend">
-            {tab === "valeur" && <>
-              <span className="leg"><span className="legdot" style={{ background: "#3fb950" }} />Valeur actuelle</span>
-              <span className="leg"><span className="legdot" style={{ background: "#f85149", opacity: .5 }} />Prix initial</span>
-            </>}
+            {tab === "valeur" && <><span className="leg"><span className="legdot" style={{ background: "#3fb950" }} />Valeur actuelle</span><span className="leg"><span className="legdot" style={{ background: "#f85149", opacity: .5 }} />Prix initial</span></>}
             {tab === "profit" && <span className="leg"><span className="legdot" style={{ background: "#58a6ff" }} />Profit net</span>}
             {tab === "skins" && activeSkins.map(s => (
               <span key={s.id} className={`leg${hidden[s.id] ? " dim" : ""}`} onClick={() => toggleHidden(s.id)}>
                 <span className="legdot" style={{ background: hidden[s.id] ? "#30363d" : s.color }} />{s.name}
               </span>
             ))}
-            {tab === "comparaison" && <>
-              <span className="leg"><span className="legdot" style={{ background: "#58a6ff" }} />Achat</span>
-              <span className="leg"><span className="legdot" style={{ background: "#3fb950" }} />Marché</span>
-            </>}
+            {tab === "comparaison" && <><span className="leg"><span className="legdot" style={{ background: "#58a6ff" }} />Achat</span><span className="leg"><span className="legdot" style={{ background: "#3fb950" }} />Marché</span></>}
           </div>
 
-          {/* Charts */}
           {tab === "comparaison" ? (
             comparisonData.length > 0 ? (
               <ResponsiveContainer width="100%" height={Math.max(200, comparisonData.length * 48 + 40)}>
@@ -557,13 +758,11 @@ export default function CS2Dashboard() {
             <div className="chart-empty">
               <div style={{ fontSize: 24 }}>📈</div>
               <p>Les courbes apparaîtront avec le temps.</p>
-              <p>Chaque rafraîchissement enregistre un point de donnée.</p>
-              <p>Cliquez "↻ Rafraîchir" ou attendez l'auto-refresh ({AUTO_REFRESH_MS / 60000} min).</p>
+              <p>Cliquez "↻ Rafraîchir" pour enregistrer un premier point.</p>
             </div>
           )}
         </div>
 
-        {/* BOTTOM */}
         <div className="bot">
           <div className="card" style={{ marginBottom: 0 }}>
             <div className="sec-lbl">mes skins</div>
