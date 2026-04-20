@@ -687,8 +687,28 @@ export default function CS2Dashboard() {
     const allTs = new Set();
     active.forEach(s => { (history[s.fullName]||[]).forEach(p => { if(p.t >= cutoff) allTs.add(p.t); }); });
     const sorted = [...allTs].sort((a,b) => a-b);
-    if (!sorted.length) return [];
-    return sorted.map(t => {
+
+  // Si un seul point ou pas de points, on crée une timeline avec 2 points
+  // pour que Recharts puisse tracer les lignes
+    const base = () => {
+      const pt = { time: Date.now(), label: fmtTime(Date.now(), range) };
+      let tot = 0, ref = 0;
+      active.forEach(s => {
+        if (hidden[s.id]) return;
+        const p = s.marketPrice ?? s.buy;
+        tot += p; ref += s.buy; pt[s.name] = p;
+      });
+      pt.valeur = tot; pt.profit = tot - ref; pt.ref = ref;
+      return pt;
+    };
+
+    if (!sorted.length) {
+      const now2 = base();
+      const earlier = { ...now2, time: Date.now() - 3600000, label: fmtTime(Date.now() - 3600000, range) };
+      return [earlier, now2];
+    }
+
+    const result = sorted.map(t => {
       const pt = { time:t, label:fmtTime(t, range) };
       let tot=0, ref=0;
       active.forEach(s => {
@@ -701,10 +721,18 @@ export default function CS2Dashboard() {
       pt.valeur = tot; pt.profit = tot - ref; pt.ref = ref;
       return pt;
     });
+
+    // Si un seul point, on duplique avec un décalage pour forcer l'affichage
+    if (result.length === 1) {
+      const earlier = { ...result[0], time: result[0].time - 3600000, label: fmtTime(result[0].time - 3600000, range) };
+      return [earlier, result[0]];
+    }
+
+    return result;
   };
 
   const timeline  = buildTimeline();
-  const hasHist   = timeline.length > 1;
+  const hasHist   = timeline.length >= 1;
   const firstVal  = timeline.length ? timeline[0].valeur : totalMarket;
   const lastVal   = timeline.length ? timeline[timeline.length-1].valeur : totalMarket;
   const chgAbs    = lastVal - firstVal;
@@ -899,10 +927,32 @@ export default function CS2Dashboard() {
                     </defs>
                     <CartesianGrid strokeDasharray="2 2" stroke={gridCol}/>
                     <XAxis dataKey="label" tick={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,fill:tickCol }} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-                    <YAxis tick={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,fill:tickCol }} tickLine={false} axisLine={false} tickFormatter={v=>v.toFixed(0)+"€"} width={50} orientation="right" domain={["dataMin - 3","dataMax + 3"]}/>
+                    <YAxis
+                      tick={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,fill:tickCol }}
+                      tickLine={false} axisLine={false}
+                      tickFormatter={v=>v.toFixed(0)+"€"}
+                      width={50} orientation="right"
+                      domain={[
+                        (dataMin) => Math.min(dataMin, totalBuy) - 3,
+                        (dataMax) => dataMax + 3
+                      ]}
+                    />
                     <Tooltip content={<TipWithTheme/>} cursor={{ stroke:"rgba(128,128,128,0.1)", strokeWidth:1, fill:"transparent" }}/>
+                    <ReferenceLine
+                      y={totalBuy}
+                      stroke={redCol}
+                      strokeWidth={1.5}
+                      strokeDasharray="5 4"
+                      opacity={0.7}
+                      label={{
+                        value: `Investi ${totalBuy.toFixed(2)}€`,
+                        position: "insideTopRight",
+                        fill: redCol,
+                        fontSize: 10,
+                        fontFamily: "'JetBrains Mono',monospace"
+                      }}
+                    />
                     <Area type="monotone" dataKey="valeur" name="Valeur" stroke={accentCol} strokeWidth={1.5} fill="url(#gV)" dot={false} activeDot={{ r:3,fill:accentCol,strokeWidth:0 }}/>
-                    <Line type="monotone" dataKey="ref" name="Prix initial" stroke={redCol} strokeWidth={1} strokeDasharray="5 4" dot={false} opacity={0.4}/>
                   </AreaChart>
                 </ResponsiveContainer>
               ) : tab === "profit" ? (
