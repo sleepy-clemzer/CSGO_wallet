@@ -1,6 +1,10 @@
 import { AUTO_MS } from "../constants/index.js";
 
-export function TopBar({ theme, toggleTheme, mounted, lastRef, refreshing, onRefresh, anyLoadingHist }) {
+export function TopBar({
+  theme, toggleTheme, mounted,
+  lastRef, refreshing, onRefresh, anyLoadingHist,
+  user, authenticated, onLogin, onLogout,
+}) {
   const isDark = theme === "dark";
 
   return (
@@ -42,6 +46,34 @@ export function TopBar({ theme, toggleTheme, mounted, lastRef, refreshing, onRef
         <button className="btn-theme" onClick={toggleTheme} title="Changer le thème">
           {mounted ? (isDark ? "☀️" : "🌙") : null}
         </button>
+
+        <div className="topbar-sep"/>
+
+        {/* Auth Steam */}
+        {authenticated && user ? (
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {user.avatar && (
+              <img
+                src={user.avatar}
+                alt={user.displayName}
+                style={{ width:28, height:28, borderRadius:"50%", border:"1px solid var(--border)", flexShrink:0 }}
+              />
+            )}
+            <span style={{ fontSize:12, fontWeight:500, color:"var(--fg)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {user.displayName}
+            </span>
+            <button className="btn-top" onClick={onLogout} style={{ color:"var(--red)", borderColor:"var(--red-bg)" }}>
+              Déconnexion
+            </button>
+          </div>
+        ) : (
+          <button className="btn-top" onClick={onLogin} style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="currentColor">
+              <path d="M16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0zm0 6a10 10 0 110 20A10 10 0 0116 6z"/>
+            </svg>
+            Connexion Steam
+          </button>
+        )}
       </div>
     </header>
   );

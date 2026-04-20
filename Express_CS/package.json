@@ -7,8 +7,13 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^4.18.2"
+    "express": "^4.22.1",
+    "express-session": "^1.19.0",
+    "node-fetch": "^2.7.0",
+    "node-vault": "^0.12.0",
+    "passport": "^0.7.0",
+    "passport-steam": "^1.0.18"
   }
 }
