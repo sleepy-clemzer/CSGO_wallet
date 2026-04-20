@@ -42,7 +42,7 @@ async function loadSecrets() {
       apiVersion: "v1",
       endpoint:   process.env.VAULT_ADDR,
       token:      process.env.VAULT_TOKEN,
-      namespace:  process.env.VAULT_NAMESPACE || "admin",
+      namespace:  process.env.VAULT_NAMESPACE,
     });
     const result  = await vc.read("secret/data/csgo-wallet");
     const secrets = result.data.data;
