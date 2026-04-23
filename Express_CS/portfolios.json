@@ -1,3 +1,20 @@
 {
-  "76561198712800058": []
+  "76561198712800058": [
+    {
+      "weapon": "AK-47",
+      "name": "Crane Flight MW",
+      "fullName": "AK-47 | Crane Flight (Minimal Wear)",
+      "buy": 20,
+      "marketPrice": 60.34,
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiNQu6WRa7ZsLvWsCGuZxuZij-1gSCGn20wksT7Xzo6ueX6VOgUmWZQiTO5btxDrldbmNru05QLfiN5EmHmsj3hXrnE8mi375M8",
+      "rarity": {
+        "id": "rarity_legendary_weapon",
+        "name": "Classified",
+        "color": "#d32ce6"
+      },
+      "color": "#a78bfa",
+      "addedAt": 1776768751722,
+      "id": 1776768788355
+    }
+  ]
 }

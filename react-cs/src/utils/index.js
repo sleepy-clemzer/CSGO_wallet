@@ -9,6 +9,15 @@ export function fmt(n, decimals = 2) {
   return n != null ? n.toFixed(decimals) : "—";
 }
 
+export function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
+
 export function fmtTime(ts, range) {
   const d = new Date(ts);
   if (range === "1h" || range === "24h") return d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });

@@ -1,8 +1,7 @@
 // server.js — CS2 Wallet Backend
-// Auth Steam + Historique prix + Portfolio par user + Vault HCP
-// npm install express cors express-session passport passport-steam node-vault dotenv node-fetch@2
-
 require("dotenv/config");
+const { requireAuth } = require("./middleware/auth");
+const { portfolios, history, historyCache } = require("./store"); // ✅
 
 const express  = require("express");
 const cors     = require("cors");
@@ -10,52 +9,67 @@ const session  = require("express-session");
 const passport = require("passport");
 const Steam    = require("passport-steam").Strategy;
 const vault    = require("node-vault");
-const fetch    = require("node-fetch");
 const https    = require("https");
-const fs       = require("fs");
-const path     = require("path");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-// ── Fichiers de données ───────────────────────────────────────────────────────
-const HISTORY_FILE   = path.join(__dirname, "price_history.json");
-const PORTFOLIO_FILE = path.join(__dirname, "portfolios.json");
+// ─────────────────────────────────────────────────────────────
+// 1) CORS
+// ─────────────────────────────────────────────────────────────
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true
+}));
 
-function loadJSON(file) {
-  try { return JSON.parse(fs.readFileSync(file, "utf-8")); } catch { return {}; }
-}
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  next();
+});
 
-// ── Vault HCP ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// 2) ROUTES IMPORTÉES
+// ─────────────────────────────────────────────────────────────
+const portfolioRoute = require("./routes/portfolio");
+
+// ─────────────────────────────────────────────────────────────
+// 3) Secrets
+// ─────────────────────────────────────────────────────────────
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 let STEAM_API_KEY  = "";
 let SESSION_SECRET = "fallback_secret_change_me";
 
 async function loadSecrets() {
-  console.log("VAULT_ADDR:", process.env.VAULT_ADDR);
-  console.log("VAULT_TOKEN:", process.env.VAULT_TOKEN ? "défini" : "undefined");
-  console.log("VAULT_NAMESPACE:", process.env.VAULT_NAMESPACE);
-  try {
-    const vc = vault({
-      apiVersion: "v1",
-      endpoint:   process.env.VAULT_ADDR,
-      token:      process.env.VAULT_TOKEN,
-      namespace:  process.env.VAULT_NAMESPACE || "admin",
-    });
-    const result  = await vc.read("secret/data/csgo-wallet");
-    const secrets = result.data.data;
-    STEAM_API_KEY  = secrets.STEAM_API_KEY;
-    SESSION_SECRET = secrets.SESSION_SECRET;
-    console.log("Secrets chargés depuis Vault HCP");
-  } catch (err) {
-    console.error("Erreur Vault :", err.message);
-    process.exit(1); // Arrête le serveur si Vault est inaccessible
+  if (process.env.NODE_ENV === "production") {
+    try {
+      const vc = vault({
+        apiVersion: "v1",
+        endpoint:   process.env.VAULT_ADDR,
+        token:      process.env.VAULT_TOKEN,
+        namespace:  process.env.VAULT_NAMESPACE || "admin",
+      });
+      const result  = await vc.read("secret/data/csgo-wallet");
+      const secrets = result.data.data;
+      STEAM_API_KEY  = secrets.STEAM_API_KEY;
+      SESSION_SECRET = secrets.SESSION_SECRET;
+      console.log("Secrets chargés depuis Vault HCP");
+    } catch (err) {
+      console.error("Erreur Vault :", err.message);
+      process.exit(1);
+    }
+  } else {
+    STEAM_API_KEY  = process.env.STEAM_API_KEY;
+    SESSION_SECRET = process.env.SESSION_SECRET || "fallback_secret_change_me";
+    console.log("Secrets chargés depuis .env (mode local)");
   }
 }
 
-// ── Helpers Steam HTTP ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// 4) Helpers Steam
+// ─────────────────────────────────────────────────────────────
 function steamRequest(reqPath, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -63,7 +77,7 @@ function steamRequest(reqPath, extraHeaders = {}) {
       path:     reqPath,
       method:   "GET",
       headers:  {
-        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "User-Agent":      "Mozilla/5.0",
         "Accept-Language": "fr-FR,fr;q=0.9",
         ...extraHeaders,
       },
@@ -99,18 +113,29 @@ function parseSteamDate(str) {
   } catch { return null; }
 }
 
-// ── Démarrage serveur ─────────────────────────────────────────────────────────
+function downsampleBackend(points, max = 2000) {
+  if (points.length <= max) return points;
+  const step = Math.floor(points.length / max);
+  return points.filter((_, i) => i % step === 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 5) Démarrage serveur
+// ─────────────────────────────────────────────────────────────
 async function startServer() {
   await loadSecrets();
+
   console.log("STEAM_API_KEY:", STEAM_API_KEY ? "définie" : "VIDE");
-  
-  // Petit délai pour laisser le temps à la découverte OpenID
-  await new Promise(r => setTimeout(r, 500));
+  console.log("STEAM_COOKIE:", process.env.STEAM_COOKIE ? "défini" : "MANQUANT ⚠️");
+
+  const openid = require("openid");
+  openid.RelyingParty.prototype._getAssociation = function(endpoint, callback) {
+    callback(null, null);
+  };
+
   const BASE_URL     = process.env.BASE_URL     || `http://localhost:${PORT}`;
   const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-  // Middlewares
-  app.use(cors({ origin: FRONTEND_URL, credentials: true }));
   app.use(express.json());
   app.use(session({
     secret:            SESSION_SECRET,
@@ -125,12 +150,12 @@ async function startServer() {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // ── Passport Steam ──────────────────────────────────────────────────────────
   passport.use(new Steam(
     {
       returnURL: `${BASE_URL}/auth/steam/return`,
       realm:     `${BASE_URL}/`,
       apiKey:    STEAM_API_KEY,
+      profile:   true,
     },
     (identifier, profile, done) => done(null, {
       steamId:     profile.id,
@@ -143,10 +168,9 @@ async function startServer() {
   passport.serializeUser((user, done)   => done(null, user));
   passport.deserializeUser((user, done) => done(null, user));
 
-  const requireAuth = (req, res, next) =>
-    req.isAuthenticated() ? next() : res.status(401).json({ error: "Non authentifié" });
-
-  // ── AUTH ────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // AUTH
+  // ─────────────────────────────────────────────────────────────
   app.get("/auth/steam",
     passport.authenticate("steam", { failureRedirect: "/" })
   );
@@ -168,7 +192,9 @@ async function startServer() {
     req.logout(() => res.redirect(FRONTEND_URL));
   });
 
-  // ── INVENTAIRE STEAM ────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // INVENTAIRE
+  // ─────────────────────────────────────────────────────────────
   app.get("/api/inventory", requireAuth, async (req, res) => {
     try {
       const data = await steamRequest(
@@ -180,22 +206,25 @@ async function startServer() {
     }
   });
 
-  // ── PORTFOLIO PAR USER ──────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // PORTFOLIO EN MÉMOIRE
+  // ─────────────────────────────────────────────────────────────
   app.get("/api/portfolio", requireAuth, (req, res) => {
-    const portfolios = loadJSON(PORTFOLIO_FILE);
     res.json(portfolios[req.user.steamId] || []);
   });
 
   app.post("/api/portfolio", requireAuth, (req, res) => {
     const { portfolio } = req.body;
-    if (!Array.isArray(portfolio)) return res.status(400).json({ error: "portfolio doit être un tableau" });
-    const portfolios = loadJSON(PORTFOLIO_FILE);
+    if (!Array.isArray(portfolio)) {
+      return res.status(400).json({ error: "portfolio doit être un tableau" });
+    }
     portfolios[req.user.steamId] = portfolio;
-    saveJSON(PORTFOLIO_FILE, portfolios);
     res.json({ saved: true });
   });
 
-  // ── PRIX STEAM ──────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // PRIX STEAM
+  // ─────────────────────────────────────────────────────────────
   app.get("/steam-price", async (req, res) => {
     const { name } = req.query;
     if (!name) return res.status(400).json({ error: "Paramètre 'name' manquant" });
@@ -203,35 +232,21 @@ async function startServer() {
       const data = await steamRequest(
         `/market/priceoverview/?appid=730&currency=3&market_hash_name=${encodeURIComponent(name)}`
       );
-      if (data.success) {
-        const price = parseSteamPrice(data.lowest_price || data.median_price);
-        if (price) {
-          const history = loadJSON(HISTORY_FILE);
-          if (!history[name]) history[name] = [];
-          history[name].push({ t: Date.now(), p: price });
-          saveJSON(HISTORY_FILE, history);
-        }
-      }
       res.json(data);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  // ── HISTORIQUE LOCAL ────────────────────────────────────────────────────────
-  app.get("/price-history", (req, res) => {
-    const history = loadJSON(HISTORY_FILE);
-    const { name } = req.query;
-    res.json(name ? { name, history: history[name] || [] } : history);
-  });
-
-  // ── HISTORIQUE COMPLET STEAM ────────────────────────────────────────────────
-  app.get("/steam-full-history", async (req, res) => {
+  // ─────────────────────────────────────────────────────────────
+  // HISTORIQUE COMPLET
+  // ─────────────────────────────────────────────────────────────
+  app.get("/steam-full-history", requireAuth, async (req, res) => {
     const { name } = req.query;
     if (!name) return res.status(400).json({ error: "Paramètre 'name' manquant" });
 
     const cookie = process.env.STEAM_COOKIE;
-    if (!cookie) return res.status(500).json({ error: "STEAM_COOKIE manquant dans .env" });
+    if (!cookie) return res.status(500).json({ error: "STEAM_COOKIE manquant" });
 
     try {
       const data = await steamRequest(
@@ -239,44 +254,41 @@ async function startServer() {
         { Cookie: `steamLoginSecure=${cookie}` }
       );
 
-      if (!data.success) return res.status(500).json({ error: "Historique introuvable" });
+      if (!data.success) {
+        return res.status(500).json({ error: "Historique introuvable — cookie expiré ?" });
+      }
 
       const points = (data.prices || [])
-        .map(([dateStr, priceStr]) => ({ t: parseSteamDate(dateStr), p: parseFloat(priceStr) }))
-        .filter(pt => pt.t !== null && !isNaN(pt.p));
+        .map(([dateStr, priceStr]) => ({
+          t: parseSteamDate(dateStr),
+          p: parseFloat(priceStr),
+        }))
+        .filter(pt => pt.t && !isNaN(pt.p));
 
-      const history = loadJSON(HISTORY_FILE);
-      const local   = history[name] || [];
-      const merged  = [...points];
-      local.forEach(lp => {
-        if (!merged.find(p => Math.abs(p.t - lp.t) < 3600000)) merged.push(lp);
-      });
-      merged.sort((a, b) => a.t - b.t);
-
-      history[name] = merged;
-      saveJSON(HISTORY_FILE, history);
-
-      res.json({ name, points: merged });
+      res.json({ name, points });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  // ── RECORD PRICES ───────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // RECORD PRICES
+  // ─────────────────────────────────────────────────────────────
   app.post("/record-prices", async (req, res) => {
     const { skins } = req.body;
     if (!skins || !Array.isArray(skins)) {
       return res.status(400).json({ error: "Body doit contenir { skins: [...] }" });
     }
 
-    const history = loadJSON(HISTORY_FILE);
-    const results = {};
-    const now     = Date.now();
+    const results     = {};
+    const now         = Date.now();
+    const maxPerCycle = 5;
+    const slice       = skins.slice(0, maxPerCycle);
 
-    for (let i = 0; i < skins.length; i++) {
-      const name = skins[i];
+    for (let i = 0; i < slice.length; i++) {
+      const name = slice[i];
       try {
-        if (i > 0) await new Promise(r => setTimeout(r, 1500));
+        if (i > 0) await new Promise(r => setTimeout(r, 1000));
         const data = await steamRequest(
           `/market/priceoverview/?appid=730&currency=3&market_hash_name=${encodeURIComponent(name)}`
         );
@@ -295,25 +307,26 @@ async function startServer() {
       }
     }
 
-    saveJSON(HISTORY_FILE, history);
     res.json({ recorded: results, timestamp: now });
   });
 
-  // ── Démarrage ───────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // ROUTE /portfolio
+  // ─────────────────────────────────────────────────────────────
+  app.use("/portfolio", portfolioRoute);
+
+  // ─────────────────────────────────────────────────────────────
+  // Lancement
+  // ─────────────────────────────────────────────────────────────
   app.listen(PORT, () => {
     console.log("======================================");
-    console.log("  CS2 Wallet Backend");
+    console.log("  CS2 Wallet Backend (in-memory)");
     console.log(`  http://localhost:${PORT}`);
     console.log("======================================");
     console.log(`  Auth Steam  : http://localhost:${PORT}/auth/steam`);
     console.log(`  API me      : http://localhost:${PORT}/api/me`);
     console.log(`  Portfolio   : http://localhost:${PORT}/api/portfolio`);
     console.log(`  Inventaire  : http://localhost:${PORT}/api/inventory`);
-    console.log("");
-    const history = loadJSON(HISTORY_FILE);
-    const count   = Object.keys(history).length;
-    const points  = Object.values(history).reduce((a, h) => a + h.length, 0);
-    console.log(`  ${count} skin(s) en historique, ${points} points`);
   });
 }
 

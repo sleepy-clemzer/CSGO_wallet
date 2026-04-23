@@ -36,7 +36,10 @@ export function AddPanel({ onAdd, allSkins, loadingDB, dbError }) {
   useEffect(() => {
     if (!selS || !selWr) { setMktP(null); setPErr(null); return; }
     const name = `${selS.name} (${selWr})`;
-    setRawN(name); setFetching(true); setPErr(null); setMktP(null);
+    setRawN(name);
+    setFetching(true);
+    setPErr(null);
+    setMktP(null);
     fetchSteamPrice(name)
       .then(p => setMktP(p))
       .catch(e => setPErr(e.message))
@@ -52,25 +55,46 @@ export function AddPanel({ onAdd, allSkins, loadingDB, dbError }) {
 
   const handleAdd = () => {
     if (!canAdd) return;
+    console.log("selS complet :", selS); 
+    const cleanName = selS.name.split("|")[1]?.trim() ?? selS.name;
+
+    // Nom complet affiché
+    const fullName = `${selW.name} | ${cleanName} (${selWr})`;
+
+    // 🔥 Nom EXACT Steam (ByMykel fournit déjà le bon)
+    const marketHashName = `${selS.name} (${selWr})`;
+
     onAdd({
-      weapon:      selW.name,
-      name:        `${selS.name.split("|")[1]?.trim() ?? selS.name} ${WEAR_MAP[selWr] ?? ""}`.trim(),
-      fullName:    rawN,
-      buy:         buyN,
+      id: `${selW.name}_${selS.id}_${Date.now()}`,
+
+      weapon: selW.name,
+      name: cleanName,
+      fullName,
+
+      // 🔥 CRITIQUE
+      marketHashName,
+
+      buyPrice: buyN,
+      buyDate: Date.now(),
+
+      buy: buyN,
       marketPrice: mktP,
-      image:       selS.image,
-      rarity:      selS.rarity,
-      color:       COLORS[Math.floor(Math.random() * COLORS.length)],
-      addedAt:     Date.now(),
+
+      image: selS.image,
+      rarity: selS.rarity,
+      color: selS.rarity?.color ?? COLORS[Math.floor(Math.random() * COLORS.length)],
+
+      addedAt: Date.now()
     });
+
     resetW(null);
   };
+
 
   return (
     <>
       <div className="sec-head">Ajouter un skin</div>
 
-      {/* Steps */}
       <div className="steps-bar">
         {["Arme","Skin","Usure","Prix"].map((s, i) => (
           <div key={s} className={`step-c${step > i+1 ? " done" : step === i+1 ? " active" : ""}`}>
