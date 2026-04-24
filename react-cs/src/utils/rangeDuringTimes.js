@@ -1,3 +1,13 @@
+/**
+ * Enum of available time ranges for charts and timeline filtering.
+ *
+ * Use RANGE constants instead of raw strings to avoid typos
+ * and make refactoring easier.
+ *
+ * Usage:
+ *   import { RANGE } from "../utils/rangeDuringTimes";
+ *   if (range === RANGE.DURING_7_DAYS) { ... }
+ */
 export const RANGE = Object.freeze({
   DURING_1_HOUR:   "1h",
   DURING_24_HOURS: "24h",
@@ -7,6 +17,10 @@ export const RANGE = Object.freeze({
   ALL_TIME:        "all"
 });
 
+/**
+ * Display labels for range buttons in the UI.
+ * Keys match RANGE values.
+ */
 export const RANGE_LABELS = Object.freeze({
   [RANGE.DURING_1_HOUR]:   "1H",
   [RANGE.DURING_24_HOURS]: "24H",
@@ -16,6 +30,13 @@ export const RANGE_LABELS = Object.freeze({
   [RANGE.ALL_TIME]:        "MAX"
 });
 
+/**
+ * Duration in milliseconds for each range.
+ * ALL_TIME maps to null — no lower time bound is applied.
+ *
+ * Usage:
+ *   const cutoff = Date.now() - RANGE_MS[range];
+ */
 export const RANGE_MS = Object.freeze({
   [RANGE.DURING_1_HOUR]:   1   * 60 * 60 * 1000,
   [RANGE.DURING_24_HOURS]: 24  * 60 * 60 * 1000,
@@ -25,6 +46,9 @@ export const RANGE_MS = Object.freeze({
   [RANGE.ALL_TIME]:        null
 });
 
+/**
+ * Ordered list of range keys for rendering range selector buttons.
+ */
 export const RANGE_LIST = [
   RANGE.DURING_1_HOUR,
   RANGE.DURING_24_HOURS,

@@ -1,13 +1,21 @@
+/**
+ * Root application component.
+ *
+ * Handles top-level concerns:
+ *   - Theme management (dark/light)
+ *   - Steam authentication state
+ *   - Conditional rendering: loading spinner / login screen / dashboard
+ */
 import { useTheme } from "./hooks/useTheme";
-import { useAuth } from "./hooks/useAuth";
-import Dashboard from "./Dashboard";
+import { useAuth }  from "./hooks/useAuth";
+import Dashboard    from "./Dashboard";
 import "./index.css";
 
 export default function App() {
-  const { theme, toggleTheme, mounted } = useTheme();
+  const { theme, toggleTheme, mounted }                        = useTheme();
   const { user, authenticated, loading: authLoading, login, logout } = useAuth();
 
-  // Écran de chargement auth
+  // Show a centered spinner while the auth state is being resolved
   if (authLoading) {
     return (
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"var(--bg)" }}>
@@ -16,12 +24,12 @@ export default function App() {
     );
   }
 
-  // Écran de connexion (VERSION ORIGINALE)
+  // Unauthenticated — show the Steam login screen
   if (!authenticated) {
     return (
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:16, background:"var(--bg)" }}>
-        
-        {/* TON LOGO ORIGINAL */}
+
+        {/* App logo */}
         <svg width="48" height="48" viewBox="0 0 28 28" fill="none">
           <rect width="28" height="28" rx="7" style={{ fill:"var(--card)", stroke:"var(--border)", strokeWidth:1 }}/>
           <path d="M14 5L19 11H9L14 5Z" style={{ fill:"var(--accent)" }}/>
@@ -31,12 +39,11 @@ export default function App() {
 
         <div style={{ fontSize:22, fontWeight:700, color:"var(--fg)" }}>CS2 Tracker</div>
         <p style={{ fontSize:13, color:"var(--muted)", maxWidth:300, textAlign:"center", lineHeight:1.6 }}>
-          Connecte-toi avec Steam pour accéder à ton portfolio et suivre tes skins.
+          Sign in with Steam to access your portfolio and track your skins.
         </p>
 
-        {/* TON BOUTON ORIGINAL */}
         <button className="btn-add" style={{ width:"auto", padding:"10px 24px" }} onClick={login}>
-          Connexion Steam
+          Steam Login
         </button>
 
         <button className="btn-theme" onClick={toggleTheme} style={{ marginTop:8 }}>
@@ -46,7 +53,7 @@ export default function App() {
     );
   }
 
-  // Dashboard (AVEC TOUTES LES PROPS)
+  // Authenticated — render the main dashboard
   return (
     <Dashboard
       theme={theme}

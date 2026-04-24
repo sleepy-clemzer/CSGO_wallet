@@ -1,14 +1,19 @@
+/**
+ * Language switcher button.
+ *
+ * Toggles between French and English.
+ * Persists the selection to localStorage via i18next-browser-languagedetector.
+ */
 import { useTranslation } from "react-i18next";
 
 export function LanguageSwitcher() {
   const { i18n } = useTranslation();
 
-  const toggle = () => {
-    const next = i18n.language.startsWith("fr") ? "en" : "fr";
-    i18n.changeLanguage(next);
-  };
+  const isFr = i18n.language?.startsWith("fr") ?? true;
 
-  const isFr = i18n.language.startsWith("fr");
+  const toggle = () => {
+    i18n.changeLanguage(isFr ? "en" : "fr");
+  };
 
   return (
     <button
