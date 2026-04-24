@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
-import { WeaponDropdown } from "./WeaponDropdown.jsx";
-import { STEAM_URL, WEAR_MAP, WEAR_ORDER, COLORS } from "../constants/index.js";
-import { parseSteamPrice } from "../utils/index.js";
+import { useState, useEffect }   from "react";
+import { WeaponDropdown }        from "./WeaponDropdown.jsx";
+import { WEAR_MAP, WEAR_ORDER, COLORS } from "../constants/index.js";
+import { parseSteamPrice }       from "../utils/index.js";
 
-async function fetchSteamPrice(name) {
-  const r = await fetch(STEAM_URL(name));
-  if (!r.ok) throw new Error(`Proxy ${r.status}`);
-  const d = await r.json();
-  if (d.error) throw new Error(d.error);
-  if (!d.success) throw new Error("Introuvable.");
+// ✅ Import du service
+import { fetchSteamPrice as fetchSteamPriceApi } from "../services/api/steamApi";
+
+async function getSteamPrice(name) {
+  const d = await fetchSteamPriceApi(name);
   return parseSteamPrice(d.lowest_price ?? d.median_price);
 }
 
@@ -40,13 +39,13 @@ export function AddPanel({ onAdd, allSkins, loadingDB, dbError }) {
     setFetching(true);
     setPErr(null);
     setMktP(null);
-    fetchSteamPrice(name)
+    getSteamPrice(name) // ✅ service
       .then(p => setMktP(p))
       .catch(e => setPErr(e.message))
       .finally(() => setFetching(false));
   }, [selS, selWr]);
 
-  const step = !selW ? 1 : !selS ? 2 : !selWr ? 3 : 4;
+  const step   = !selW ? 1 : !selS ? 2 : !selWr ? 3 : 4;
   const resetW = (w) => { setSelW(w); setSelS(null); setSelWr(null); setSkinQ(""); setMktP(null); setBuy(""); setPErr(null); };
   const buyN   = parseFloat(buy) || 0;
   const profit = mktP != null ? mktP - buyN : null;
@@ -55,41 +54,29 @@ export function AddPanel({ onAdd, allSkins, loadingDB, dbError }) {
 
   const handleAdd = () => {
     if (!canAdd) return;
-    console.log("selS complet :", selS); 
-    const cleanName = selS.name.split("|")[1]?.trim() ?? selS.name;
 
-    // Nom complet affiché
-    const fullName = `${selW.name} | ${cleanName} (${selWr})`;
-
-    // 🔥 Nom EXACT Steam (ByMykel fournit déjà le bon)
+    const cleanName      = selS.name.split("|")[1]?.trim() ?? selS.name;
+    const fullName       = `${selW.name} | ${cleanName} (${selWr})`;
     const marketHashName = `${selS.name} (${selWr})`;
 
     onAdd({
-      id: `${selW.name}_${selS.id}_${Date.now()}`,
-
-      weapon: selW.name,
-      name: cleanName,
+      id:             `${selW.name}_${selS.id}_${Date.now()}`,
+      weapon:         selW.name,
+      name:           cleanName,
       fullName,
-
-      // 🔥 CRITIQUE
       marketHashName,
-
-      buyPrice: buyN,
-      buyDate: Date.now(),
-
-      buy: buyN,
-      marketPrice: mktP,
-
-      image: selS.image,
-      rarity: selS.rarity,
-      color: selS.rarity?.color ?? COLORS[Math.floor(Math.random() * COLORS.length)],
-
-      addedAt: Date.now()
+      buyPrice:       buyN,
+      buyDate:        Date.now(),
+      buy:            buyN,
+      marketPrice:    mktP,
+      image:          selS.image,
+      rarity:         selS.rarity,
+      color:          selS.rarity?.color ?? COLORS[Math.floor(Math.random() * COLORS.length)],
+      addedAt:        Date.now()
     });
 
     resetW(null);
   };
-
 
   return (
     <>
